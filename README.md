@@ -1,181 +1,139 @@
-# RadarDOU SDK Python
+# radardou-python
 
-SDK oficial para integração com a API do [Radar DOU](https://radar-dou.com) - Sistema de Monitoramento do Diário Oficial da União.
+SDK oficial Python para a API do [Radar DOU](https://www.radar-dou.com) — Sistema de Monitoramento do Diário Oficial da União.
 
 ## Requisitos
 
-- Python 3.8+
-- API Key válida de assinante do Radar DOU
+- Python >= 3.8
+- API Key válida de assinante do Radar DOU (gere em [www.radar-dou.com/api-keys](https://www.radar-dou.com/api-keys))
 
 ## Instalação
 
 ```bash
-pip install radardou
+pip install git+https://github.com/Wandrys-dev/radardou-python.git
 ```
 
-## Início Rápido
+## Início rápido
 
 ```python
+import os
 from radardou import RadarDOU
 
-# Inicialize o cliente com sua API Key
-client = RadarDOU(api_key="sua_api_key_aqui")
+# Carregue a API key de variável de ambiente — NUNCA hardcode no script
+api_key = os.environ["RADAR_API_KEY"]
 
-# Buscar publicações
-resultados = client.buscar("licitação")
-print(f"Encontrados {resultados['total']} resultados")
+with RadarDOU(api_key=api_key) as client:
+    # IMPORTANTE: pelo menos um filtro é obrigatório
+    resultados = client.buscar(date_from="2026-05-01", limit=10)
 
-# Ao finalizar, encerre a sessão
-client.close()
+    print(f"Total no banco: {resultados['pagination']['total']}")
+    for pub in resultados["data"]:
+        print(f"- [{pub['secao_codigo']}] {pub['titulo']}")
 ```
 
-### Usando Context Manager
+## Buscar publicações
 
 ```python
-from radardou import RadarDOU
+# Por data
+client.buscar(date_from="2026-05-01", date_to="2026-05-08")
 
-with RadarDOU(api_key="sua_api_key") as client:
-    resultados = client.buscar("contrato", orgao="Ministério da Saúde")
-    for pub in resultados["resultados"]:
-        print(f"- {pub['titulo']}")
-```
+# Por palavra-chave
+client.buscar(query="licitação", date_from="2026-05-01")
 
-## Funcionalidades
-
-### Busca de Publicações
-
-```python
-# Busca simples
-resultados = client.buscar("edital")
-
-# Busca com filtros
-resultados = client.buscar(
-    termo="pregão eletrônico",
-    data_inicio="2024-01-01",
-    data_fim="2024-12-31",
-    orgao="Ministério da Educação",
-    tipo="edital",
-    secao=3,
-    pagina=1,
-    limite=50
+# Filtros combinados
+client.buscar(
+    query="edital",
+    secao="DO3",         # DO1, DO2, DO3 ou Extra
+    tipo="Edital",       # Portaria, Edital, Despacho, etc.
+    date_from="2026-01-01",
+    date_to="2026-05-08",
+    page=1,
+    limit=50,            # máx 100
 )
-
-# Obter publicação específica
-publicacao = client.obter_publicacao("abc123")
 ```
 
-### Gerenciamento de Alertas
+**Filtro mínimo obrigatório.** A chamada `client.buscar()` sem nenhum dos parâmetros acima
+levanta `APIError("FILTER_REQUIRED")`. Isso protege você (e o servidor) de scans amplos
+da tabela de publicações (~7M+ linhas).
+
+## Detalhes de uma publicação
+
+A listagem retorna apenas o `texto_resumo`. Para obter o **texto completo**:
+
+```python
+ids = [p["id"] for p in resultados["data"]]
+for id in ids:
+    pub = client.obter_publicacao(id)
+    print(pub["titulo"])
+    print(pub["texto_puro"])    # texto completo
+    print(pub["texto_html"])    # HTML completo
+```
+
+## Alertas
 
 ```python
 # Listar alertas
 alertas = client.listar_alertas()
 
 # Criar alerta
-alerta = client.criar_alerta(
-    nome="Monitorar Licitações Saúde",
-    termos=["licitação", "pregão"],
-    orgaos=["Ministério da Saúde"],
-    email_notificacao=True
+client.criar_alerta(
+    name="Concursos TI",
+    search_criteria={"query": "desenvolvedor", "secao": "DO3"},
+    frequency="daily",          # realtime | hourly | daily | weekly
+    email_notification=True,
 )
-
-# Atualizar alerta
-client.atualizar_alerta(alerta["id"], nome="Novo Nome")
-
-# Excluir alerta
-client.excluir_alerta(alerta["id"])
 ```
 
-### Informações de Uso
+## Favoritos e coleções
 
 ```python
-# Ver uso da API
-uso = client.obter_uso()
-print(f"Requisições hoje: {uso['requisicoes_hoje']}")
-print(f"Limite por hora: {uso['limite_hora']}")
+client.listar_favoritos()
+client.adicionar_favorito(publication_id="12345")
+client.remover_favorito(publication_id="12345")
 
-# Informações da conta
-conta = client.obter_conta()
-print(f"Plano: {conta['plano']}")
+client.listar_colecoes()
+client.criar_colecao(name="Editais 2026")
 ```
 
-## Controle de Sessão
-
-O SDK implementa controle automático de sessão para garantir que sua API Key seja usada apenas por você. Isso inclui:
-
-- **Fingerprint de dispositivo**: Identifica unicamente seu computador
-- **Heartbeat automático**: Mantém sua sessão ativa
-- **Detecção de uso compartilhado**: Impede que outros usem sua API Key simultaneamente
-
-### Comportamento de Sessão
-
-Quando você inicializa o cliente, uma sessão é automaticamente criada. Se outro dispositivo tentar usar a mesma API Key, receberá um erro `SessionConflictError`.
+## Vocabulário
 
 ```python
-from radardou import RadarDOU, SessionConflictError
-
-try:
-    client = RadarDOU(api_key="sua_api_key")
-except SessionConflictError as e:
-    print(f"Erro: {e.message}")
-    print(f"IP ativo: {e.active_ip}")
+vocab = client.vocabulario()  # lista seções e tipos de ato disponíveis
 ```
 
-## Tratamento de Erros
+## Tratamento de erros
 
 ```python
-from radardou import (
-    RadarDOU,
+from radardou import RadarDOU
+from radardou.exceptions import (
     AuthenticationError,
     SessionConflictError,
     RateLimitError,
-    APIError
+    APIError,
 )
 
 try:
-    client = RadarDOU(api_key="sua_api_key")
-    resultados = client.buscar("teste")
-
+    with RadarDOU(api_key=os.environ["RADAR_API_KEY"]) as client:
+        resultados = client.buscar(date_from="2026-05-01")
 except AuthenticationError as e:
-    print(f"Erro de autenticação: {e.message}")
-    # API Key inválida ou expirada
-
+    print(f"Chave inválida ou expirada: {e}")
 except SessionConflictError as e:
-    print(f"Conflito de sessão: {e.message}")
-    print(f"Outro IP está usando: {e.active_ip}")
-
+    print(f"Outra sessão já ativa em {e.active_ip}")
 except RateLimitError as e:
-    print(f"Limite atingido: {e.message}")
-    print(f"Limite: {e.limit}")
-    print(f"Reset em: {e.reset_at}")
-
+    print(f"Rate limit atingido. Reset em {e.reset_at}")
 except APIError as e:
-    print(f"Erro da API: {e.message}")
-    print(f"Status: {e.status_code}")
+    print(f"Erro {e.status_code}: {e}")
 ```
 
-## Limites por Plano
+## Limites por plano
 
-| Plano | Requisições/hora | Usuários Simultâneos |
-|-------|------------------|----------------------|
-| Profissional | 1.000 | 1 |
-| Premium | 5.000 | 3 |
-| Enterprise | Ilimitado | Ilimitado |
-
-## Obtenha sua API Key
-
-Para usar este SDK, você precisa de uma API Key válida:
-
-1. Acesse [radar-dou.com](https://radar-dou.com)
-2. Crie uma conta ou faça login
-3. Assine um plano
-4. Gere sua API Key em [Configurações > API Keys](https://radar-dou.com/api-keys)
-
-## Suporte
-
-- 📧 Email: suporte@radar-dou.com
-- 📖 Documentação: [radar-dou.com/docs](https://radar-dou.com/docs)
-- 🐛 Issues: [GitHub Issues](https://github.com/radar-dou/radardou-python/issues)
+| Plano | Rate limit | Sessões simultâneas | Chaves |
+|-------|-----------|---------------------|--------|
+| Trial (5 dias) | 100 req/h | 1 | 1 |
+| Profissional | 1.000 req/h | 1 | 2 |
+| Premium | 5.000 req/h | 3 | 5 |
+| Empresarial | 10.000 req/h | 10 | 10 |
 
 ## Licença
 
-MIT License - veja [LICENSE](LICENSE) para detalhes.
+MIT

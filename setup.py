@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="radardou",
-    version="1.0.0",
+    version="1.0.1",
     author="Radar DOU",
     author_email="suporte@radar-dou.com",
     description="SDK oficial para a API do Radar DOU - Monitoramento do Diário Oficial da União",
