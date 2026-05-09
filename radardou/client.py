@@ -100,11 +100,11 @@ class RadarDOU:
     # ---------- Publicacoes ----------
 
     def buscar(self, query=None, date_from=None, date_to=None,
-               secao=None, tipo=None, page=1, limit=20):
+               secao=None, tipo=None, orgao=None, page=1, limit=20):
         """Busca publicacoes. Pelo menos um filtro e obrigatorio."""
-        if not any([query, date_from, date_to, secao, tipo]):
+        if not any([query, date_from, date_to, secao, tipo, orgao]):
             raise APIError(
-                "Pelo menos um filtro e obrigatorio: query, date_from, date_to, secao ou tipo.",
+                "Pelo menos um filtro e obrigatorio: query, date_from, date_to, secao, tipo ou orgao.",
                 code="FILTER_REQUIRED"
             )
         params = {"page": page, "limit": min(limit, 100)}
@@ -113,6 +113,7 @@ class RadarDOU:
         if date_to:   params["date_to"] = date_to
         if secao:     params["secao"] = secao
         if tipo:      params["tipo"] = tipo
+        if orgao:     params["orgao"] = orgao
         return self._request("GET", "/publications", params=params)
 
     def obter_publicacao(self, id):
