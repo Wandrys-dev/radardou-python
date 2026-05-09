@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radardou"
-version = "1.0.1"
+version = "1.0.2"
 description = "SDK oficial para a API do Radar DOU - Monitoramento do Diário Oficial da União"
 readme = "README.md"
 license = {text = "MIT"}
